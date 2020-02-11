@@ -3,6 +3,34 @@ import asyncio
 
 @contextlib.asynccontextmanager
 async def multi_await():
+  """A context manager to call multiple functions that return awaitables, iteratively
+
+  This function manages calling functions iteratively to get awaitable objects from them.
+  This code works with functions that return coroutines or tasks. This is useful when you
+  want to do something like get results from multiple queues in a single loop.
+  
+  Functions returning awaitables need to be registered by calling m.add(fn).
+  
+  Getting results from those functions is done by calling "await m.get()". Two lists
+  are returned. The first is a list of completed awaitables. The second is a list of exceptions
+  raiesd. Each list has its values placed positionally, equivalent to the order in which m.add(fn)
+  was called. Each list has None in the corresponding position if the function is not complete, or
+  if the function actually returned the value None.
+  
+  Example code using instances of asyncio.Queue named "q1" and "q2":
+  
+  async with multi_await() as m:
+    # Setup functions that get called each iteration
+    m.add(q1.get)
+    m.add(q2.get)
+    
+    while True: # keep calling the same two functions forever
+      # check if the awaitable from either function has a result ready
+      completed, failures = await m.get()
+      
+      result_from_queue1, result_from_queue2 = completed
+      failure_from_queue1, failure_from_queue2 = failures
+  """
   ma = MultiAwait()
   try:
     yield ma
@@ -10,6 +38,11 @@ async def multi_await():
     await ma.cancel() 
 
 class MultiAwait(object):
+  """This class implements all the logic to iteratively call functions which return awaitable objects.
+
+     See the documentation of the multi_await() function in this package for recommended usage. If you
+     create an instance of this manually, then call the .cancel() method when you are done with this object.  
+  """
   def __init__(self):
     self.tasks = []
     self.srcs = []
