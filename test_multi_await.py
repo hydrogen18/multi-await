@@ -75,7 +75,7 @@ async def test_can_get_an_exception_first():
 
     assert results == [None, None]   
     assert isinstance(failures[0], ValueError)
-    assert failures[1] == None
+    assert failures[1] is None
     await  m.cancel() 
     
 async def test_can_get_a_value_with_another_coro_that_never_returns():
@@ -95,7 +95,7 @@ async def test_can_get_exception_and_value():
     
     results, failures = await m.get()
     assert results == [1, None]
-    assert failures[0] == None
+    assert failures[0] is None
     assert isinstance(failures[1], ValueError)
     
 async def test_can_run_the_same_tasks_multiple_times():
