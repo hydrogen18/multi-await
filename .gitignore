@@ -3,3 +3,5 @@
 __pycache__/
 dist/
 venv/
+.idea/
+multi_await.egg-info/

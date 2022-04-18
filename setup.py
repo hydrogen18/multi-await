@@ -4,7 +4,7 @@ DESC = 'A python package to wait for multiple awaitables'
 
 setuptools.setup(
 name='multi-await',
-version='1.0.0',
+version='1.0.1',
 author='Eric Urban',
 author_email='hydrogen18@gmail.com',
 description=DESC,

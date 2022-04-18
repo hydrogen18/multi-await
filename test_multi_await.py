@@ -1,8 +1,7 @@
 import functools
 import asyncio
 import random
-from multi_await import MultiAwait
-from multi_await import multi_await
+from multi_await import *
 
 async def raise_exception():
   int('z')
@@ -10,9 +9,16 @@ async def raise_exception():
 async def return_value():
   return 1
 
+async def return_a_value(v):
+  return v
+
 async def sleep_random():
   await asyncio.sleep(0.1 + random.random())
   return 'sleep'
+
+async def sleep_and_return(duration, v):
+  await asyncio.sleep(duration)
+  return v
   
 async def run_forever():
   while True:
@@ -126,7 +132,130 @@ async def test_fails_if_nothing_to_do():
       await m.get()
     except RuntimeError as e:
       assert str(e) == 'Attempted to await 0 coroutines'
-          
+
+async def test_gather_or_abort():
+  tasks = [asyncio.create_task(x) for x in (return_a_value(1), return_a_value(2), return_a_value(3),)]
+  a, b, c = await gather_or_abort(*tasks)
+  assert a == 1
+  assert b == 2
+  assert c == 3
+
+async def test_gather_or_abort_exception():
+  exception_task = asyncio.create_task(raise_exception())
+  sleep_tasks = [asyncio.create_task(run_forever()) for _ in range (3)]
+  try:
+    await gather_or_abort(exception_task, *sleep_tasks)
+  except ValueError as exc:
+    assert exc is not None
+  else:
+    assert False
+
+  for t in sleep_tasks:
+    assert t.cancelled()
+
+  assert exception_task.done()
+  assert exception_task.exception() is not None
+  assert not exception_task.cancelled()
+
+async def test_wait_or_abort():
+  tasks = [asyncio.create_task(x) for x in (return_a_value(1), return_a_value(2), return_a_value(3),)]
+  done = await wait_or_abort(tasks)
+  assert len(done) == 3
+
+  result = set([await x for x in done])
+  assert 1 in result
+  assert 2 in result
+  assert 3 in result
+
+async def test_wait_or_abort_timeout():
+  sleep_task = asyncio.create_task(asyncio.sleep(9999))
+  value_tasks = [asyncio.create_task(x) for x in (return_a_value(1), return_a_value(2), return_a_value(3))]
+  tasks = value_tasks + [sleep_task]
+  try:
+    await wait_or_abort(tasks, timeout=0.1)
+  except asyncio.TimeoutError as exc:
+    assert exc is not None
+  else:
+    assert False
+
+  assert sleep_task.cancelled()
+
+  for t in value_tasks:
+    assert t.done()
+
+async def test_wait_or_abort_exception():
+  exception_task = asyncio.create_task(raise_exception())
+  sleep_tasks = [asyncio.create_task(run_forever()) for _ in range (3)]
+  try:
+    # Set timeout here, even with that present the exception from the task should be returned
+    await wait_or_abort([exception_task] + sleep_tasks, timeout=0.0)
+  except ValueError as exc:
+    assert exc is not None
+  else:
+    assert False
+
+  for t in sleep_tasks:
+    assert t.cancelled()
+
+  assert exception_task.done()
+  assert exception_task.exception() is not None
+  assert not exception_task.cancelled()
+
+async def test_as_completed_or_abort():
+  tasks = [asyncio.create_task(x) for x in (return_a_value(1), return_a_value(2), return_a_value(3),)]
+  async for x in as_completed_or_abort(tasks):
+    assert x in [1,2,3]
+
+async def test_as_completed_or_abort_exception():
+  exception_task = asyncio.create_task(raise_exception())
+  value_tasks = [asyncio.create_task(x) for x in (return_a_value(1), return_a_value(2), return_a_value(3))]
+  sleep_tasks = [asyncio.create_task(asyncio.sleep(999)) for _ in range(3)]
+  tasks = value_tasks + [exception_task] + sleep_tasks
+  try:
+    async for x in as_completed_or_abort(tasks):
+      assert False
+  except ValueError as exc:
+    assert exc is not None
+  else:
+    assert False
+
+  for t in value_tasks:
+    assert t.result() is not None
+
+  for t in sleep_tasks:
+    assert t.cancelled()
+
+  assert exception_task.done()
+  assert exception_task.exception() is not None
+  assert not exception_task.cancelled()
+
+async def test_as_completed_timeout():
+  sleep_task = asyncio.create_task(asyncio.sleep(999))
+  try:
+    async for x in as_completed_or_abort([sleep_task],timeout=0.1):
+      assert False
+  except asyncio.TimeoutError as exc:
+    assert exc is not None
+  else:
+    assert False
+
+  assert sleep_task.cancelled()
+
+async def test_as_completed_timeout_many():
+  sleep_task = asyncio.create_task(asyncio.sleep(999))
+  value_tasks = [asyncio.create_task(sleep_and_return(0.1,x)) for x in range(3)]
+  values = set()
+  try:
+    async for x in as_completed_or_abort([sleep_task] + value_tasks,timeout=0.3):
+      values.add(x)
+  except asyncio.TimeoutError as exc:
+    assert exc is not None
+  else:
+    assert False
+
+  assert sleep_task.cancelled()
+  assert values == {0,1,2}
+
 for entry in dir():
   if not entry.startswith('test_'):
     continue
