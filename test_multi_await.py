@@ -140,6 +140,20 @@ async def test_gather_or_abort():
   assert b == 2
   assert c == 3
 
+async def test_gather_or_abort_cancel():
+  tasks = [asyncio.create_task(x) for x in (sleep_and_return(5.0, 1), sleep_and_return(5.0, 2), sleep_and_return(5.0, 3))]
+  tested_task = asyncio.create_task(gather_or_abort(*tasks))
+  tasks[0].cancel()
+
+  try:
+    await tested_task
+    assert False
+  except asyncio.CancelledError:
+    pass
+
+  assert tasks[1].cancelled()
+  assert tasks[2].cancelled()
+
 async def test_gather_or_abort_exception():
   exception_task = asyncio.create_task(raise_exception())
   sleep_tasks = [asyncio.create_task(run_forever()) for _ in range (3)]
@@ -182,6 +196,21 @@ async def test_wait_or_abort_timeout():
 
   for t in value_tasks:
     assert t.done()
+
+async def test_wait_or_abort_cancel():
+  tasks = [asyncio.create_task(x) for x in (sleep_and_return(5.0, 1), sleep_and_return(5.0, 2), sleep_and_return(5.0, 3))]
+
+  tested_task = asyncio.create_task(wait_or_abort(tasks))
+  tasks[0].cancel()
+
+  try:
+    await tested_task
+    assert False
+  except asyncio.CancelledError:
+    pass
+
+  assert tasks[1].cancelled()
+  assert tasks[2].cancelled()
 
 async def test_wait_or_abort_exception():
   exception_task = asyncio.create_task(raise_exception())
@@ -230,6 +259,7 @@ async def test_as_completed_or_abort_exception():
   assert not exception_task.cancelled()
 
 async def test_as_completed_timeout():
+
   sleep_task = asyncio.create_task(asyncio.sleep(999))
   try:
     async for x in as_completed_or_abort([sleep_task],timeout=0.1):
@@ -240,6 +270,20 @@ async def test_as_completed_timeout():
     assert False
 
   assert sleep_task.cancelled()
+
+async def test_as_completed_cancel():
+  tasks = [asyncio.create_task(x) for x in (sleep_and_return(5.0, 1), sleep_and_return(5.0, 2), sleep_and_return(5.0, 3))]
+  tasks[0].cancel()
+  try:
+    async for x in as_completed_or_abort(tasks):
+      assert False
+  except asyncio.CancelledError:
+    pass
+  else:
+    assert False
+
+  assert tasks[1].cancelled()
+  assert tasks[2].cancelled()
 
 async def test_as_completed_timeout_many():
   sleep_task = asyncio.create_task(asyncio.sleep(999))
