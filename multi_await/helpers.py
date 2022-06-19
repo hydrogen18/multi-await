@@ -30,17 +30,32 @@ async def wait_or_abort(tasks, timeout=None):
   # All tasks were cancelled, so this is a timeout condition
   raise asyncio.TimeoutError()
 
-async def as_completed_or_abort(tasks, timeout=None):
+def as_completed_or_abort(tasks, timeout=None):
   '''Replacement for asyncio.as_completed, only works with Task objects. Instead of returning an iterator of coroutines,
   this is an async iterator that returns values as each one is completed. All tasks are cancelled with an exception
   occurs'''
 
-  try:
-    for f in asyncio.as_completed(tasks, timeout=timeout):
-      yield await f
-  except BaseException:
+  completed_iterator = asyncio.as_completed(tasks, timeout=timeout)
+  remaining = len(tasks)
+  async def _one_completed_or_abort():
+    nonlocal remaining
+    try:
+      result = await next(completed_iterator)
+      failure = None
+    except BaseException as exc:
+      failure = exc
+      result = None
+
+    if failure is None:
+      return result
+
+    remaining = 0
     await aiotk.cancel_all(tasks)
-    raise
+    raise failure
+
+  while remaining > 0:
+    yield _one_completed_or_abort()
+    remaining -= 1
 
 async def with_value(value, awaitable):
   '''Awaits the awaitable, returning the value from it and value in a tuple. Used for pairing the result of a task
