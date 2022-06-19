@@ -39,12 +39,14 @@ def as_completed_or_abort(tasks, timeout=None):
   remaining = len(tasks)
   async def _one_completed_or_abort():
     nonlocal remaining
+    next_item = next(completed_iterator)
     try:
-      result = await next(completed_iterator)
-      failure = None
+      result = await next_item
     except BaseException as exc:
       failure = exc
       result = None
+    else:
+      failure = None
 
     if failure is None:
       return result
