@@ -300,6 +300,32 @@ async def test_as_completed_timeout_many():
   assert sleep_task.cancelled()
   assert values == {0,1,2}
 
+
+  
+async def test_get_or_raise():
+  async with multi_await() as m:
+   m.add(lambda : asyncio.sleep(99.0))
+   m.add(raise_exception)
+   
+   try:
+     await m.get_or_raise()
+   except ValueError as exc:
+     assert exc is not None
+   else:
+     assert False
+   
+async def test_get_or_raise_to_outer():
+  try:
+    async with multi_await() as m:
+      m.add(lambda : asyncio.sleep(99.0))
+      m.add(raise_exception)   
+      await m.get_or_raise()
+  except ValueError as exc:
+    assert exc is not None
+  else:
+    assert False  
+
+
 for entry in dir():
   if not entry.startswith('test_'):
     continue
@@ -313,4 +339,5 @@ for entry in dir():
 
   el.stop()
   el.close()
+  
   
