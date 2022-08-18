@@ -75,6 +75,14 @@ class MultiAwait(object):
     self.tasks = [None for _ in self.srcs]  # leave in a good state
     self.completed.clear()
 
+  async def get_or_raise(self):
+    results, failures = await self.get()
+    for exc in failures:
+      if exc is not None:
+        raise exc
+        
+    return results
+
   async def get(self):
     if len(self.srcs) == 0:
       raise RuntimeError('Attempted to await 0 coroutines')
